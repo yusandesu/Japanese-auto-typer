@@ -13,7 +13,7 @@ class App:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title("Japanese Auto Typer")
-        root.geometry("560x560")
+        root.geometry("600x660")
 
         self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
@@ -32,6 +32,37 @@ class App:
         self.typo_rate = self._labeled_spinbox(settings, "Typo chance (%)", 0, 50, 4, 2)
         self.pause_rate = self._labeled_spinbox(settings, "Random pause chance (%)", 0, 50, 3, 3)
         self.start_delay = self._labeled_spinbox(settings, "Start delay (seconds)", 1, 30, 5, 4)
+
+        from . import furigana
+
+        ime_available = furigana.available()
+        self.ime_mode = tk.BooleanVar(value=ime_available)
+        ime_check = ttk.Checkbutton(
+            settings,
+            text="Type kanji as hiragana reading, then convert (like a real IME)",
+            variable=self.ime_mode,
+        )
+        ime_check.grid(row=5, column=0, columnspan=2, sticky="w", padx=6, pady=(8, 0))
+        if not ime_available:
+            ime_check.config(state="disabled")
+            tk.Label(
+                settings,
+                text="(install pykakasi to enable: pip install pykakasi)",
+                fg="#888",
+            ).grid(row=6, column=0, columnspan=2, sticky="w", padx=24)
+
+        self.bullet_mode = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            settings,
+            text='Google Docs bullets: lines starting with "- " or "* " become real bullets',
+            variable=self.bullet_mode,
+        ).grid(row=7, column=0, columnspan=2, sticky="w", padx=6, pady=(4, 0))
+        tk.Label(
+            settings,
+            text="(sends Ctrl+Shift+8 — only enable this for Google Docs, it does\nsomething else in other apps)",
+            fg="#888",
+            justify="left",
+        ).grid(row=8, column=0, columnspan=2, sticky="w", padx=24, pady=(0, 6))
 
         btn_frame = tk.Frame(root)
         btn_frame.pack(fill="x", padx=8, pady=8)
@@ -69,6 +100,8 @@ class App:
             pause_rate=int(self.pause_rate.get()) / 100.0,
         )
         start_delay = int(self.start_delay.get())
+        ime_mode = bool(self.ime_mode.get())
+        bullet_mode = bool(self.bullet_mode.get())
 
         self.stop_event.clear()
         self.start_btn.config(state="disabled")
@@ -84,6 +117,8 @@ class App:
                     stop_event=self.stop_event,
                     start_delay=start_delay,
                     on_tick=self._set_status,
+                    ime_mode=ime_mode,
+                    bullet_mode=bullet_mode,
                 )
                 if self.stop_event.is_set():
                     self._set_status("Stopped.")

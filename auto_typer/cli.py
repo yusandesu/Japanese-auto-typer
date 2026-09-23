@@ -22,6 +22,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--typo-rate", type=float, default=0.04, help="Probability (0-1) of a typo per char.")
     p.add_argument("--pause-rate", type=float, default=0.03, help="Probability (0-1) of a random pause per char.")
     p.add_argument("--delay", type=int, default=5, help="Seconds to wait before typing starts.")
+    p.add_argument(
+        "--ime",
+        action="store_true",
+        default=True,
+        help="Type kanji as its hiragana reading, then convert (default: on, needs pykakasi).",
+    )
+    p.add_argument(
+        "--no-ime",
+        action="store_false",
+        dest="ime",
+        help="Disable hiragana-then-convert simulation; type kanji directly.",
+    )
+    p.add_argument(
+        "--bullets",
+        action="store_true",
+        help='Treat lines starting with "- " or "* " as Google Docs bullets '
+        "(sends Ctrl+Shift+8 -- only use this when typing into Google Docs).",
+    )
     return p
 
 
@@ -45,7 +63,14 @@ def main(argv=None):
 
     stop_event = threading.Event()
     try:
-        backend.run(text, config, stop_event=stop_event, start_delay=args.delay)
+        backend.run(
+            text,
+            config,
+            stop_event=stop_event,
+            start_delay=args.delay,
+            ime_mode=args.ime,
+            bullet_mode=args.bullets,
+        )
     except KeyboardInterrupt:
         stop_event.set()
         print("\nStopped.")

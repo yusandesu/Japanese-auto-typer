@@ -7,7 +7,13 @@ without a display. A backend (see backend.py) supplies the actual
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass, field
+
+# Runs of these characters are treated as "kanji words" that, when a
+# reading_fn is supplied to human_type(), get typed as their hiragana
+# reading first and then "converted" to kanji, mimicking a real IME.
+_KANJI_RUN_RE = re.compile(r"[一-鿿々豈-﫿]+")
 
 
 @dataclass
@@ -42,50 +48,38 @@ class Config:
     )
     long_pause_range: tuple[float, float] = (0.35, 1.1)
 
+    # When a reading_fn is passed to human_type(): how long the typist
+    # "looks at" IME conversion candidates before picking one, and how
+    # quickly the hiragana reading gets cleared once converted (that part
+    # is a near-instant IME action, not a deliberate correction, so it's
+    # much faster than reaction_delay_range).
+    conversion_pause_range: tuple[float, float] = (0.25, 0.9)
+    conversion_backspace_delay_range: tuple[float, float] = (0.015, 0.05)
+
     def char_delay(self, rng: random.Random) -> float:
         cpm = rng.uniform(self.cpm_min, self.cpm_max)
         chars_per_second = cpm / 60.0
         return 1.0 / chars_per_second
 
 
-def human_type(
-    text: str,
-    type_char,
-    backspace,
-    sleep,
-    config: Config | None = None,
-    rng: random.Random | None = None,
-    stop_event=None,
-) -> None:
-    """Type ``text`` character by character with human-like timing.
+def _type_run(chars, type_char, backspace, sleep, cfg: Config, rnd: random.Random, stop_event) -> bool:
+    """Types `chars` one at a time with typos/pauses.
 
-    Parameters
-    ----------
-    type_char: callable(str) -> None
-        Emits a single character (a backend paste/keystroke call).
-    backspace: callable() -> None
-        Deletes the previously typed character.
-    sleep: callable(float) -> None
-        Sleeps for the given number of seconds (injected for testability).
-    stop_event: object with ``is_set()`` -> bool, optional
-        Checked between characters to allow cancellation.
+    Returns False if stopped early via stop_event, True on completion.
     """
-    cfg = config or Config()
-    rnd = rng or random.Random()
-
     i = 0
-    n = len(text)
+    n = len(chars)
     while i < n:
         if stop_event is not None and stop_event.is_set():
-            return
+            return False
 
-        ch = text[i]
+        ch = chars[i]
 
         made_typo = rnd.random() < cfg.typo_rate
         if made_typo and rnd.random() < cfg.transpose_share and i + 1 < n:
             # Transposition typo: type the next two characters swapped,
             # notice, delete both, then type them in the correct order.
-            next_ch = text[i + 1]
+            next_ch = chars[i + 1]
             type_char(next_ch)
             sleep(cfg.char_delay(rnd))
             type_char(ch)
@@ -122,3 +116,75 @@ def human_type(
             sleep(rnd.uniform(*cfg.long_pause_range))
         elif rnd.random() < cfg.pause_rate:
             sleep(rnd.uniform(*cfg.pause_range))
+
+    return True
+
+
+def human_type(
+    text: str,
+    type_char,
+    backspace,
+    sleep,
+    config: Config | None = None,
+    rng: random.Random | None = None,
+    stop_event=None,
+    reading_fn=None,
+) -> None:
+    """Type ``text`` with human-like timing.
+
+    Parameters
+    ----------
+    type_char: callable(str) -> None
+        Emits a character or chunk of characters (a backend paste/keystroke
+        call). May be called with a multi-character string, e.g. when a
+        converted kanji word is inserted in one action.
+    backspace: callable() -> None
+        Deletes one previously typed character.
+    sleep: callable(float) -> None
+        Sleeps for the given number of seconds (injected for testability).
+    stop_event: object with ``is_set()`` -> bool, optional
+        Checked between characters to allow cancellation.
+    reading_fn: callable(str) -> str, optional
+        If given, every run of kanji characters is first typed as its
+        hiragana reading (via ``reading_fn``), then briefly paused on,
+        backspaced, and replaced by the kanji itself in one paste — the
+        same "type the reading, then convert" flow a real Japanese IME
+        uses. If omitted, kanji is typed directly like any other
+        character.
+    """
+    cfg = config or Config()
+    rnd = rng or random.Random()
+
+    if reading_fn is None:
+        _type_run(text, type_char, backspace, sleep, cfg, rnd, stop_event)
+        return
+
+    pos = 0
+    for m in _KANJI_RUN_RE.finditer(text):
+        if stop_event is not None and stop_event.is_set():
+            return
+
+        if m.start() > pos:
+            if not _type_run(text[pos:m.start()], type_char, backspace, sleep, cfg, rnd, stop_event):
+                return
+
+        surface = m.group(0)
+        reading = reading_fn(surface) or surface
+
+        if reading and reading != surface:
+            if not _type_run(reading, type_char, backspace, sleep, cfg, rnd, stop_event):
+                return
+            sleep(rnd.uniform(*cfg.conversion_pause_range))
+            for _ in range(len(reading)):
+                backspace()
+                sleep(rnd.uniform(*cfg.conversion_backspace_delay_range))
+            type_char(surface)
+            sleep(cfg.char_delay(rnd))
+        else:
+            if not _type_run(surface, type_char, backspace, sleep, cfg, rnd, stop_event):
+                return
+
+        pos = m.end()
+
+    if pos < len(text):
+        _type_run(text[pos:], type_char, backspace, sleep, cfg, rnd, stop_event)

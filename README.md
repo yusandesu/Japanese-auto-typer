@@ -74,6 +74,19 @@ cat message.txt | python main.py --cli --stdin
   character, independent of typos. Sentence-ending punctuation (。、!?)
   always triggers a slightly longer pause.
 - **Start delay**: seconds before typing begins, so you can switch windows.
+- **Hiragana → kanji conversion (IME simulation)**: on by default (needs
+  `pykakasi`, included in requirements.txt). Every kanji word is first typed
+  as its hiragana reading, paused on briefly (like looking at IME
+  conversion candidates), then replaced by the kanji — the same two-step
+  flow a real Japanese IME uses, instead of the kanji just appearing
+  instantly. Typos can happen during the hiragana part too.
+- **Google Docs bullets**: off by default. When enabled, any line in your
+  pasted text that starts with `- ` or `* ` (e.g. `- first point`) is typed
+  as a real Google Docs bulleted-list item, by sending Google Docs' actual
+  "toggle bulleted list" shortcut (Ctrl+Shift+8) before typing that line —
+  not just a typed `•` character. **Only enable this when typing into
+  Google Docs** — that shortcut does something unrelated in other apps
+  (e.g. it toggles formatting marks in Microsoft Word).
 
 The final text typed is always exactly what you pasted — typos are always
 corrected, never left in.
