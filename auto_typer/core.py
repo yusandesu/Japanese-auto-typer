@@ -129,6 +129,7 @@ def human_type(
     rng: random.Random | None = None,
     stop_event=None,
     reading_fn=None,
+    convert_fn=None,
 ) -> None:
     """Type ``text`` with human-like timing.
 
@@ -146,11 +147,17 @@ def human_type(
         Checked between characters to allow cancellation.
     reading_fn: callable(str) -> str, optional
         If given, every run of kanji characters is first typed as its
-        hiragana reading (via ``reading_fn``), then briefly paused on,
-        backspaced, and replaced by the kanji itself in one paste — the
-        same "type the reading, then convert" flow a real Japanese IME
-        uses. If omitted, kanji is typed directly like any other
-        character.
+        hiragana reading (via ``reading_fn``) — the same "type the reading,
+        then convert" flow a real Japanese IME uses. If omitted, kanji is
+        typed directly like any other character.
+    convert_fn: callable(n: int, surface: str) -> None, optional
+        Replaces the last `n` typed characters (the hiragana reading) with
+        `surface` (the kanji) in one atomic action — e.g. by selecting them
+        and pasting over the selection, so the reading visually turns into
+        the kanji instead of being visibly deleted character by character.
+        Only used when reading_fn is also given. If omitted, falls back to
+        backspacing the reading away one character at a time and then
+        typing the kanji.
     """
     cfg = config or Config()
     rnd = rng or random.Random()
@@ -175,10 +182,13 @@ def human_type(
             if not _type_run(reading, type_char, backspace, sleep, cfg, rnd, stop_event):
                 return
             sleep(rnd.uniform(*cfg.conversion_pause_range))
-            for _ in range(len(reading)):
-                backspace()
-                sleep(rnd.uniform(*cfg.conversion_backspace_delay_range))
-            type_char(surface)
+            if convert_fn is not None:
+                convert_fn(len(reading), surface)
+            else:
+                for _ in range(len(reading)):
+                    backspace()
+                    sleep(rnd.uniform(*cfg.conversion_backspace_delay_range))
+                type_char(surface)
             sleep(cfg.char_delay(rnd))
         else:
             if not _type_run(surface, type_char, backspace, sleep, cfg, rnd, stop_event):

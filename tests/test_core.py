@@ -16,6 +16,7 @@ class RecordingTyper:
         self.buffer = []
         self.type_calls = 0
         self.backspace_calls = 0
+        self.convert_calls = 0
 
     def type_char(self, ch):
         # ch may be a single character or a multi-character chunk (e.g. a
@@ -27,6 +28,13 @@ class RecordingTyper:
     def backspace(self):
         self.buffer.pop()
         self.backspace_calls += 1
+
+    def convert_fn(self, n, surface):
+        # Mimics selecting the last n characters and pasting over them in
+        # one atomic action, instead of backspacing them one at a time.
+        del self.buffer[len(self.buffer) - n:]
+        self.buffer.extend(surface)
+        self.convert_calls += 1
 
     def result(self):
         return "".join(self.buffer)
@@ -184,6 +192,34 @@ class TestHumanType(unittest.TestCase):
         )
         self.assertEqual(typer.result(), text)
         self.assertEqual(typer.backspace_calls, 0)
+
+    def test_ime_mode_uses_convert_fn_for_atomic_replace(self):
+        # when convert_fn is given, the reading should be swapped for the
+        # kanji in one atomic action instead of via repeated backspace().
+        text = "私は日本語を勉強している。"
+        readings = {
+            "私": "わたし",
+            "日本語": "にほんご",
+            "勉強": "べんきょう",
+        }
+
+        def reading_fn(surface):
+            return readings.get(surface, surface)
+
+        typer = RecordingTyper()
+        cfg = Config(typo_rate=0.0, pause_rate=0.0)
+        human_type(
+            text,
+            typer.type_char,
+            typer.backspace,
+            sleep=lambda s: None,
+            config=cfg,
+            reading_fn=reading_fn,
+            convert_fn=typer.convert_fn,
+        )
+        self.assertEqual(typer.result(), text)
+        self.assertEqual(typer.backspace_calls, 0)
+        self.assertEqual(typer.convert_calls, 3)  # 私, 日本語, 勉強
 
 
 if __name__ == "__main__":

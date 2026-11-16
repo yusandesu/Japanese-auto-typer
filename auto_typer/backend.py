@@ -36,6 +36,24 @@ def backspace() -> None:
     pyautogui.press("backspace")
 
 
+def select_left(n: int) -> None:
+    """Selects the n characters immediately before the cursor."""
+    if n <= 0:
+        return
+    pyautogui.keyDown("shift")
+    for _ in range(n):
+        pyautogui.press("left")
+    pyautogui.keyUp("shift")
+
+
+def convert_to_kanji(n: int, surface: str) -> None:
+    """Replaces the last `n` typed characters with `surface` in one atomic
+    paste, so the hiragana reading visually turns into the kanji instead of
+    being deleted character by character first."""
+    select_left(n)
+    paste_char(surface)
+
+
 def countdown(seconds: int, on_tick=print) -> None:
     for remaining in range(seconds, 0, -1):
         on_tick(f"Starting in {remaining}... click into the target text field now.")
@@ -93,6 +111,7 @@ def run(
                 config=config,
                 stop_event=stop_event,
                 reading_fn=reading_fn,
+                convert_fn=convert_to_kanji,
             )
     finally:
         if original_clipboard is not None:
@@ -129,6 +148,7 @@ def _run_with_bullets(text: str, config, reading_fn, stop_event) -> None:
             config=config,
             stop_event=stop_event,
             reading_fn=reading_fn,
+            convert_fn=convert_to_kanji,
         )
 
         if idx < len(lines) - 1:
