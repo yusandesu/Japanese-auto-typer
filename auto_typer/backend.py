@@ -16,7 +16,13 @@ import time
 import pyautogui
 import pyperclip
 
-pyautogui.PAUSE = 0
+# A small non-zero pause between synthetic key events. With PAUSE=0,
+# bursts of key/clipboard events can occasionally get dropped or
+# reordered by the OS (seen as "random words just don't get typed"),
+# especially on Windows or with a clipboard manager/cloud-clipboard-sync
+# running. This costs a few milliseconds per action, which is invisible
+# next to the deliberate human-timing delays already in use.
+pyautogui.PAUSE = 0.02
 pyautogui.FAILSAFE = True  # move mouse to a screen corner to abort
 
 _PASTE_MODIFIER = "command" if sys.platform == "darwin" else "ctrl"
@@ -27,9 +33,27 @@ _BULLET_ACTIONS = {
     "outdent": lambda: pyautogui.hotkey("shift", "tab"),
 }
 
+_CLIPBOARD_VERIFY_TIMEOUT = 0.5
+_CLIPBOARD_POLL_INTERVAL = 0.005
+
 
 def paste_char(ch: str) -> None:
     pyperclip.copy(ch)
+    # pyperclip.copy() can return before the OS clipboard actually holds
+    # the new value (clipboard-owner handoff isn't instant, and a
+    # clipboard manager/antivirus hook can delay it further). Pasting too
+    # early can silently grab the *previous* clipboard contents, or get
+    # dropped outright -- which looks like random missing words. Poll
+    # until the clipboard actually reflects `ch` (or give up after a
+    # timeout and paste anyway, rather than hang forever).
+    deadline = time.time() + _CLIPBOARD_VERIFY_TIMEOUT
+    while time.time() < deadline:
+        try:
+            if pyperclip.paste() == ch:
+                break
+        except Exception:
+            pass
+        time.sleep(_CLIPBOARD_POLL_INTERVAL)
     pyautogui.hotkey(_PASTE_MODIFIER, "v")
 
 
