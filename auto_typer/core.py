@@ -15,6 +15,59 @@ from dataclasses import dataclass, field
 # reading first and then "converted" to kanji, mimicking a real IME.
 _KANJI_RUN_RE = re.compile(r"[一-鿿々豈-﫿]+")
 
+# Bullet markers recognized when typing into Google Docs with bullet mode
+# on. "-", "*" and "•" are a top-level bullet; "◦" (optionally
+# indented in the source text) is a nested, second-level bullet.
+_TOP_BULLET_RE = re.compile(r"^[-*\u2022]\s+")
+_SUB_BULLET_RE = re.compile(r"^\s*\u25e6\s+")
+
+
+def bullet_line_level(line: str) -> tuple[int, str]:
+    """Classifies a line of pasted text for Google Docs bullet typing.
+
+    Returns (level, content): level is 0 for a plain paragraph, 1 for a
+    top-level bullet ("- ", "* " or "• "), 2 for a nested bullet
+    ("◦ "). `content` has the marker (and any leading indent)
+    stripped.
+    """
+    m = _TOP_BULLET_RE.match(line)
+    if m:
+        return 1, line[m.end():]
+    m = _SUB_BULLET_RE.match(line)
+    if m:
+        return 2, line[m.end():]
+    return 0, line
+
+
+def bullet_transition(current_level: int, target_level: int) -> list[str]:
+    """Returns the list-formatting actions needed to go from
+    `current_level` to `target_level` in a Google Doc.
+
+    Actions: "toggle" (Ctrl+Shift+8 -- turns bulleted-list formatting on or
+    off for the current, empty paragraph), "indent" (Tab -- one level
+    deeper), "outdent" (Shift+Tab -- one level up). Must be applied while
+    the current line is still empty (e.g. right after pressing Enter),
+    since Tab/Shift+Tab do something else once there's text before the
+    cursor.
+    """
+    actions: list[str] = []
+    level = current_level
+    while level > target_level:
+        if level == 1:
+            actions.append("toggle")  # turn bullets off entirely
+            level = 0
+        else:
+            actions.append("outdent")
+            level -= 1
+    while level < target_level:
+        if level == 0:
+            actions.append("toggle")  # turn bullets on
+            level = 1
+        else:
+            actions.append("indent")
+            level += 1
+    return actions
+
 
 @dataclass
 class Config:

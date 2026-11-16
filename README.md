@@ -81,12 +81,15 @@ cat message.txt | python main.py --cli --stdin
   flow a real Japanese IME uses, instead of the kanji just appearing
   instantly. Typos can happen during the hiragana part too.
 - **Google Docs bullets**: off by default. When enabled, any line in your
-  pasted text that starts with `- ` or `* ` (e.g. `- first point`) is typed
-  as a real Google Docs bulleted-list item, by sending Google Docs' actual
-  "toggle bulleted list" shortcut (Ctrl+Shift+8) before typing that line —
-  not just a typed `•` character. **Only enable this when typing into
-  Google Docs** — that shortcut does something unrelated in other apps
-  (e.g. it toggles formatting marks in Microsoft Word).
+  pasted text starting with `- `, `* ` or `• ` becomes a real top-level
+  Google Docs bulleted-list item, and a line starting with `◦ ` (optionally
+  indented) becomes a nested, second-level bullet underneath it — by
+  sending Google Docs' actual list shortcuts (Ctrl+Shift+8 to toggle
+  bullets, Tab/Shift+Tab to indent/outdent) before typing that line, not
+  just typing a bullet character as literal text. **Only enable this when
+  typing into Google Docs** — those shortcuts do something unrelated in
+  other apps (e.g. Ctrl+Shift+8 toggles formatting marks in Microsoft
+  Word).
 
 The final text typed is always exactly what you pasted — typos are always
 corrected, never left in.

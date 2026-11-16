@@ -10,7 +10,6 @@ focus.
 from __future__ import annotations
 
 import random
-import re
 import sys
 import time
 
@@ -22,9 +21,11 @@ pyautogui.FAILSAFE = True  # move mouse to a screen corner to abort
 
 _PASTE_MODIFIER = "command" if sys.platform == "darwin" else "ctrl"
 
-# Lines starting with one of these markers are treated as bullet items when
-# bullet_mode is on. The marker itself is stripped before typing.
-_BULLET_PREFIX_RE = re.compile(r"^[-*•]\s+")
+_BULLET_ACTIONS = {
+    "toggle": lambda: pyautogui.hotkey("ctrl", "shift", "8"),
+    "indent": lambda: pyautogui.press("tab"),
+    "outdent": lambda: pyautogui.hotkey("shift", "tab"),
+}
 
 
 def paste_char(ch: str) -> None:
@@ -83,10 +84,13 @@ def run(
 
     ime_mode: simulate typing kanji as its hiragana reading, then
         converting it (see auto_typer.core.human_type's reading_fn).
-    bullet_mode: lines starting with "- ", "* " or "• " are turned into
-        real Google Docs bulleted-list items via Ctrl+Shift+8. Only enable
-        this when typing into Google Docs -- that shortcut does something
-        else in other apps (e.g. toggles formatting marks in Word).
+    bullet_mode: lines starting with "- ", "* " or "• " are turned
+        into real Google Docs top-level bulleted-list items, and lines
+        starting with "◦ " (optionally indented) become nested,
+        second-level bullets, via Ctrl+Shift+8/Tab/Shift+Tab. Only enable
+        this when typing into Google Docs -- those shortcuts do something
+        else in other apps (e.g. Ctrl+Shift+8 toggles formatting marks in
+        Word).
     """
     from .core import human_type
 
@@ -122,23 +126,20 @@ def run(
 
 
 def _run_with_bullets(text: str, config, reading_fn, stop_event) -> None:
-    from .core import human_type
+    from .core import bullet_line_level, bullet_transition, human_type
 
     lines = text.split("\n")
-    in_bullet = False
+    current_level = 0
 
     for idx, line in enumerate(lines):
         if stop_event is not None and stop_event.is_set():
             return
 
-        m = _BULLET_PREFIX_RE.match(line)
-        is_bullet = bool(m)
-        content = line[m.end():] if m else line
-
-        if is_bullet != in_bullet:
-            pyautogui.hotkey("ctrl", "shift", "8")
+        target_level, content = bullet_line_level(line)
+        for action in bullet_transition(current_level, target_level):
+            _BULLET_ACTIONS[action]()
             time.sleep(0.15)
-            in_bullet = is_bullet
+        current_level = target_level
 
         human_type(
             content,
