@@ -55,6 +55,10 @@ def convert_to_kanji(n: int, surface: str) -> None:
     paste_char(surface)
 
 
+def toggle_bold() -> None:
+    pyautogui.hotkey(_PASTE_MODIFIER, "b")
+
+
 def countdown(seconds: int, on_tick=print) -> None:
     for remaining in range(seconds, 0, -1):
         on_tick(f"Starting in {remaining}... click into the target text field now.")
@@ -91,8 +95,11 @@ def run(
         this when typing into Google Docs -- those shortcuts do something
         else in other apps (e.g. Ctrl+Shift+8 toggles formatting marks in
         Word).
+
+    In either mode, wrapping any text in **double asterisks** types it as
+    bold (Ctrl+B before and after), markdown-style.
     """
-    from .core import human_type
+    from .core import human_type_line
 
     reading_fn = _resolve_reading_fn(ime_mode)
 
@@ -107,7 +114,7 @@ def run(
         if bullet_mode:
             _run_with_bullets(text, config, reading_fn, stop_event)
         else:
-            human_type(
+            human_type_line(
                 text,
                 type_char=paste_char,
                 backspace=backspace,
@@ -116,6 +123,7 @@ def run(
                 stop_event=stop_event,
                 reading_fn=reading_fn,
                 convert_fn=convert_to_kanji,
+                bold_fn=toggle_bold,
             )
     finally:
         if original_clipboard is not None:
@@ -126,7 +134,7 @@ def run(
 
 
 def _run_with_bullets(text: str, config, reading_fn, stop_event) -> None:
-    from .core import bullet_line_level, bullet_transition, human_type
+    from .core import bullet_line_level, bullet_transition, human_type_line
 
     lines = text.split("\n")
     current_level = 0
@@ -141,7 +149,7 @@ def _run_with_bullets(text: str, config, reading_fn, stop_event) -> None:
             time.sleep(0.15)
         current_level = target_level
 
-        human_type(
+        human_type_line(
             content,
             type_char=paste_char,
             backspace=backspace,
@@ -150,6 +158,7 @@ def _run_with_bullets(text: str, config, reading_fn, stop_event) -> None:
             stop_event=stop_event,
             reading_fn=reading_fn,
             convert_fn=convert_to_kanji,
+            bold_fn=toggle_bold,
         )
 
         if idx < len(lines) - 1:

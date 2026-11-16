@@ -251,3 +251,62 @@ def human_type(
 
     if pos < len(text):
         _type_run(text[pos:], type_char, backspace, sleep, cfg, rnd, stop_event)
+
+
+# Markdown-style bold markers: wrap text in **double asterisks** to have it
+# typed as bold (toggled on/off via Ctrl+B) when a bold_fn is supplied.
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def parse_bold_segments(text: str) -> list[tuple[str, bool]]:
+    """Splits `text` on **bold** markers.
+
+    Returns a list of (segment, is_bold) pairs with the ** markers
+    themselves removed. A plain string with no markers comes back as a
+    single (text, False) segment.
+    """
+    segments: list[tuple[str, bool]] = []
+    pos = 0
+    for m in _BOLD_RE.finditer(text):
+        if m.start() > pos:
+            segments.append((text[pos:m.start()], False))
+        segments.append((m.group(1), True))
+        pos = m.end()
+    if pos < len(text) or not segments:
+        segments.append((text[pos:], False))
+    return segments
+
+
+def human_type_line(
+    text: str,
+    type_char,
+    backspace,
+    sleep,
+    config: Config | None = None,
+    rng: random.Random | None = None,
+    stop_event=None,
+    reading_fn=None,
+    convert_fn=None,
+    bold_fn=None,
+) -> None:
+    """Like human_type(), but also understands **bold** markers in `text`.
+
+    bold_fn: callable() -> None, optional
+        Toggles bold formatting on/off (e.g. Ctrl+B). Called once before
+        and once after each bold segment. If omitted (or `text` has no
+        ``**`` markers), behaves exactly like human_type().
+    """
+    if bold_fn is None or "**" not in text:
+        human_type(text, type_char, backspace, sleep, config, rng, stop_event, reading_fn, convert_fn)
+        return
+
+    rnd = rng or random.Random()
+    for segment, is_bold in parse_bold_segments(text):
+        if stop_event is not None and stop_event.is_set():
+            return
+        if is_bold:
+            bold_fn()
+        if segment:
+            human_type(segment, type_char, backspace, sleep, config, rnd, stop_event, reading_fn, convert_fn)
+        if is_bold:
+            bold_fn()

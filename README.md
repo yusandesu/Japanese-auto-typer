@@ -90,8 +90,14 @@ cat message.txt | python main.py --cli --stdin
   typing into Google Docs** — those shortcuts do something unrelated in
   other apps (e.g. Ctrl+Shift+8 toggles formatting marks in Microsoft
   Word).
+- **Bold text**: always on, no checkbox needed. Wrap any text in
+  `**double asterisks**`, Markdown-style, and it's typed with Ctrl+B
+  pressed before it and again after, so it comes out bold instead of with
+  literal asterisks. Works inside bullet lines too, e.g.
+  `- **重要**：この部分は太字になる`.
 
-The final text typed is always exactly what you pasted — typos are always
+The final text typed is always exactly what you pasted (minus `**`
+markers, which are formatting instructions, not text) — typos are always
 corrected, never left in.
 
 ## Limitations
